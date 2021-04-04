@@ -30,6 +30,8 @@ parser.add_argument('--image_folder', type = str, required = True,
 parser.add_argument('--image_size', type = int, required = False, default = 128,
                     help='image size')
 
+parser.add_argument('--fp16', action='store_true')
+
 parser = distributed_utils.wrap_arg_parser(parser)
 
 args = parser.parse_args()
@@ -102,6 +104,8 @@ vae = DiscreteVAE(
     kl_div_loss_weight = KL_LOSS_WEIGHT
 )
 if not using_deepspeed:
+    if args.fp16:
+        vae = vae.half()
     vae = vae.cuda()
 
 
@@ -147,7 +151,12 @@ if distr_backend.is_root_worker():
 # distribute
 
 distr_backend.check_batch_size(BATCH_SIZE)
-deepspeed_config = {'train_batch_size': BATCH_SIZE}
+deepspeed_config = {
+    'train_batch_size': BATCH_SIZE,
+    'fp16': {
+        'enabled': args.fp16,
+    },
+}
 
 (distr_vae, distr_opt, distr_dl, distr_sched) = distr_backend.distribute(
     args=args,
@@ -166,6 +175,8 @@ temp = STARTING_TEMP
 
 for epoch in range(EPOCHS):
     for i, (images, _) in enumerate(distr_dl):
+        if args.fp16:
+            images = images.half()
         images = images.cuda()
 
         loss, recons = distr_vae(
