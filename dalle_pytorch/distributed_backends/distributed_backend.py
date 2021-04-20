@@ -16,6 +16,7 @@ class DistributedBackend:
     Variables that must be overridden:
     - BACKEND_MODULE_NAME
     - BACKEND_NAME
+    - HAS_INDEPENDENT_WORKERS
     Methods that must be overridden:
     - wrap_arg_parser
     - _initialize
@@ -31,6 +32,8 @@ class DistributedBackend:
     """Name of the module to import for the backend."""
     BACKEND_NAME = None
     """Name of the backend for printing."""
+    HAS_INDEPENDENT_WORKERS = None
+    """Whether each worker's forward call is independent from the others'."""
 
     ROOT_RANK = 0
 
@@ -40,10 +43,13 @@ class DistributedBackend:
     """Whether the backend is initialized."""
 
     def __init__(self):
-        if self.BACKEND_MODULE_NAME is None:
-            raise NotImplementedError('BACKEND_MODULE_NAME is not set')
-        if self.BACKEND_NAME is None:
-            raise NotImplementedError('BACKEND_NAME is not set')
+        for attr in [
+                'BACKEND_MODULE_NAME',
+                'BACKEND_NAME',
+                'HAS_INDEPENDENT_WORKERS',
+        ]:
+            if getattr(self, attr) is None:
+                raise NotImplementedError(f'{attr} must be overridden')
 
     def has_backend(self):
         """Return whether the backend module is now imported."""

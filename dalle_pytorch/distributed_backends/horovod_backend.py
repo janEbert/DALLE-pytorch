@@ -8,6 +8,7 @@ class HorovodBackend(DistributedBackend):
 
     BACKEND_MODULE_NAME = 'horovod.torch'
     BACKEND_NAME = 'Horovod'
+    HAS_INDEPENDENT_WORKERS = True
 
     def wrap_arg_parser(self, parser):
         if not self.has_backend():

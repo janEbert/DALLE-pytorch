@@ -11,6 +11,8 @@ class DeepSpeedBackend(DistributedBackend):
 
     BACKEND_MODULE_NAME = 'deepspeed'
     BACKEND_NAME = 'DeepSpeed'
+    # This is not necessarily _always_ False but most likely.
+    HAS_INDEPENDENT_WORKERS = False
 
     def wrap_arg_parser(self, parser):
         if not self.has_backend():
