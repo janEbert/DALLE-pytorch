@@ -11,6 +11,7 @@ class DummyBackend(DistributedBackend):
     # throw an error upon import.
     BACKEND_MODULE_NAME = 'NO MODULE'
     BACKEND_NAME = 'Dummy'
+    HAS_INDEPENDENT_WORKERS = True
 
     def has_backend(self):
         return True
