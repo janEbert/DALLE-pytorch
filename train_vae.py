@@ -19,6 +19,7 @@ from torchvision.utils import make_grid, save_image
 
 from dalle_pytorch import distributed_utils
 from dalle_pytorch import DiscreteVAE
+from dalle_pytorch.resblock_grad_scaler import add_resblock_grad_scalers
 
 # argument parsing
 
@@ -107,6 +108,11 @@ if not using_deepspeed:
     if args.fp16:
         vae = vae.half()
     vae = vae.cuda()
+
+# add per-resblock gradient scaling
+
+if args.fp16:
+    add_resblock_grad_scalers(vae)
 
 
 assert len(ds) > 0, 'folder does not contain any images'

@@ -21,6 +21,7 @@ from torchvision.utils import make_grid, save_image
 
 from dalle_pytorch import distributed_utils
 from dalle_pytorch import OpenAIDiscreteVAE, VQGanVAE1024, DiscreteVAE, DALLE
+from dalle_pytorch.resblock_grad_scaler import add_resblock_grad_scalers
 from dalle_pytorch.tokenizer import tokenizer, HugTokenizer, ChineseTokenizer, YttmTokenizer
 
 # argument parsing
@@ -156,6 +157,11 @@ else:
 
 if isinstance(vae, OpenAIDiscreteVAE) and args.fp16:
     vae.enc.blocks.output.conv.use_float16 = True
+
+# add per-resblock gradient scaling
+
+if args.fp16:
+    add_resblock_grad_scalers(vae)
 
 # helpers
 
