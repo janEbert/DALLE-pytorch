@@ -121,6 +121,11 @@ else:
     if exists(VAE_PATH):
         vae_path = Path(VAE_PATH)
         assert vae_path.exists(), 'VAE model file does not exist'
+        assert not vae_path.is_dir(), \
+            ('Cannot load VAE model from directory; please use a '
+             'standard *.pt checkpoint. '
+             'Currently, merging a DeepSpeed-partitioned VAE into a DALLE '
+             'model is not supported.')
 
         loaded_obj = torch.load(str(vae_path))
 
@@ -156,19 +161,6 @@ if isinstance(vae, OpenAIDiscreteVAE) and args.fp16:
 
 
 # helpers
-
-def save_model(path):
-    if not distr_backend.is_root_worker():
-        return
-
-    save_obj = {
-        'hparams': dalle_params,
-        'vae_params': vae_params,
-        'weights': dalle.state_dict()
-    }
-
-    torch.save(save_obj, path)
-
 
 def group_weight(model):
     group_decay, group_no_decay = [], []
@@ -222,7 +214,7 @@ if not using_deepspeed:
         dalle = dalle.half()
     dalle = dalle.cuda()
 
-if RESUME:
+if RESUME and not using_deepspeed:
     dalle.load_state_dict(weights)
 
 # optimizer
@@ -277,6 +269,39 @@ deepspeed_config = {
 )
 avoid_model_calls = using_deepspeed and args.fp16
 
+if RESUME and using_deepspeed:
+    cp_path = Path(DALLE_PATH)
+    path_sans_extension = cp_path.parent / cp_path.stem
+    cp_dir = Path(str(path_sans_extension) + '-ds-cp')
+
+    assert cp_dir.is_dir(), \
+        f'DeepSpeed checkpoint directory {cp_dir} not found'
+    distr_dalle.load_checkpoint(str(cp_dir))
+
+
+def save_model(path):
+    save_obj = {
+        'hparams': dalle_params,
+        'vae_params': vae_params,
+    }
+    if using_deepspeed:
+        cp_path = Path(path)
+        path_sans_extension = cp_path.parent / cp_path.stem
+        cp_dir = str(path_sans_extension) + '-ds-cp'
+
+        distr_dalle.save_checkpoint(cp_dir, client_state=save_obj)
+        # We do not return so we do get a "normal" checkpoint to refer to.
+
+    if not distr_backend.is_root_worker():
+        return
+
+    save_obj = {
+        **save_obj,
+        'weights': dalle.state_dict()
+    }
+
+    torch.save(save_obj, path)
+
 # training
 
 for epoch in range(EPOCHS):
@@ -300,10 +325,10 @@ for epoch in range(EPOCHS):
         # Collective loss, averaged
         avg_loss = distr_backend.average_all(loss)
 
-        if distr_backend.is_root_worker():
-            log = {}
+        log = {}
 
-            if i % 10 == 0:
+        if i % 10 == 0:
+            if distr_backend.is_root_worker():
                 print(epoch, i, f'loss - {avg_loss.item()}')
 
                 log = {
@@ -334,8 +359,8 @@ for epoch in range(EPOCHS):
                 # topk sampling at 0.9
                 image = DALLE.generate_images(distr_dalle, text[:1], filter_thres=0.9)
 
+            save_model(f'./dalle.pt')
             if distr_backend.is_root_worker():
-                save_model(f'./dalle.pt')
                 wandb.save(f'./dalle.pt')
 
                 log = {
@@ -359,8 +384,8 @@ for epoch in range(EPOCHS):
         model_artifact.add_file('dalle.pt')
         run.log_artifact(model_artifact)
 
+save_model(f'./dalle-final.pt')
 if distr_backend.is_root_worker():
-    save_model(f'./dalle-final.pt')
     wandb.save('./dalle-final.pt')
     model_artifact = wandb.Artifact('trained-dalle', type='model', metadata=dict(model_config))
     model_artifact.add_file('dalle-final.pt')
