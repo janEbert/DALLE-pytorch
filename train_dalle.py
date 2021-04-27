@@ -313,15 +313,28 @@ for epoch in range(EPOCHS):
                     'loss': avg_loss.item()
                 }
 
-            if i % 100 == 0:
-                sample_text = text[:1]
-                token_list = sample_text.masked_select(sample_text != 0).tolist()
-                decoded_text = tokenizer.decode(token_list)
+        if (
+                (not distr_backend.HAS_INDEPENDENT_WORKERS
+                 or distr_backend.is_root_worker())
+                and i % 100 == 0
+        ):
+            # We guard this so we do not do redundant work here for each
+            # worker since we are only using the generated batch on the
+            # root worker.
+            # Not all distributed backends have this possible
+            # redundancy.
 
-                if not avoid_model_calls:
-                    # CUDA index errors when we don't guard this
-                    image = dalle.generate_images(text[:1], filter_thres=0.9)  # topk sampling at 0.9
+            sample_text = text[:1]
+            token_list = sample_text.masked_select(sample_text != 0).tolist()
+            decoded_text = tokenizer.decode(token_list)
 
+            if not avoid_model_calls:
+                # CUDA index errors when we don't guard this
+
+                # topk sampling at 0.9
+                image = DALLE.generate_images(distr_dalle, text[:1], filter_thres=0.9)
+
+            if distr_backend.is_root_worker():
                 save_model(f'./dalle.pt')
                 wandb.save(f'./dalle.pt')
 
@@ -331,6 +344,7 @@ for epoch in range(EPOCHS):
                 if not avoid_model_calls:
                     log['image'] = wandb.Image(image, caption=decoded_text)
 
+        if distr_backend.is_root_worker():
             wandb.log(log)
 
     if LR_DECAY and not using_deepspeed:

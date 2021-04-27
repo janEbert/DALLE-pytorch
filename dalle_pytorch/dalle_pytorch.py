@@ -395,6 +395,17 @@ class DALLE(nn.Module):
         img = None,
         num_init_img_tokens = None
     ):
+        # Use this for calling the forward pass.
+        call_self = self
+        if (
+                not isinstance(self, DALLE)
+                and distributed_utils.is_distributed
+                and distributed_utils.using_backend(
+                    distributed_utils.DeepSpeedBackend)
+        ):
+            # We have a DeepSpeed engine wrapping (hopefully) DALLE.
+            self = self.module
+
         vae, text_seq_len, image_seq_len, num_text_tokens = self.vae, self.text_seq_len, self.image_seq_len, self.num_text_tokens
         total_len = text_seq_len + image_seq_len
 
@@ -417,7 +428,7 @@ class DALLE(nn.Module):
 
             text, image = out[:, :text_seq_len], out[:, text_seq_len:]
 
-            logits = self(text, image, mask = mask)[:, -1, :]
+            logits = call_self(text, image, mask = mask)[:, -1, :]
 
             filtered_logits = top_k(logits, thres = filter_thres)
             probs = F.softmax(filtered_logits / temperature, dim = -1)
