@@ -327,16 +327,15 @@ for epoch in range(EPOCHS):
 
         log = {}
 
-        if i % 10 == 0:
-            if distr_backend.is_root_worker():
-                print(epoch, i, f'loss - {avg_loss.item()}')
+        if i % 10 == 0 and distr_backend.is_root_worker():
+            print(epoch, i, f'loss - {avg_loss.item()}')
 
-                log = {
-                    **log,
-                    'epoch': epoch,
-                    'iter': i,
-                    'loss': avg_loss.item()
-                }
+            log = {
+                **log,
+                'epoch': epoch,
+                'iter': i,
+                'loss': avg_loss.item()
+            }
 
         if (
                 (not distr_backend.HAS_INDEPENDENT_WORKERS
