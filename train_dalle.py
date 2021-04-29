@@ -99,6 +99,16 @@ elif args.chinese:
 
 # reconstitute vae
 
+
+def cp_path_to_dir(cp_path, tag):
+    """Convert a checkpoint path to a directory with `tag` inserted."""
+    if not isinstance(cp_path, Path):
+        cp_path = Path(DALLE_PATH)
+    path_sans_extension = cp_path.parent / cp_path.stem
+    cp_dir = Path(f'{path_sans_extension}-{tag}-cp')
+    return cp_dir
+
+
 if RESUME:
     dalle_path = Path(DALLE_PATH)
     assert dalle_path.exists(), 'DALL-E model file does not exist'
@@ -270,10 +280,7 @@ deepspeed_config = {
 avoid_model_calls = using_deepspeed and args.fp16
 
 if RESUME and using_deepspeed:
-    cp_path = Path(DALLE_PATH)
-    path_sans_extension = cp_path.parent / cp_path.stem
-    cp_dir = Path(str(path_sans_extension) + '-ds-cp')
-
+    cp_dir = cp_path_to_dir(DALLE_PATH, 'ds')
     assert cp_dir.is_dir(), \
         f'DeepSpeed checkpoint directory {cp_dir} not found'
     distr_dalle.load_checkpoint(str(cp_dir))
@@ -285,9 +292,7 @@ def save_model(path):
         'vae_params': vae_params,
     }
     if using_deepspeed:
-        cp_path = Path(path)
-        path_sans_extension = cp_path.parent / cp_path.stem
-        cp_dir = str(path_sans_extension) + '-ds-cp'
+        cp_dir = cp_path_to_dir(path, 'ds')
 
         distr_dalle.save_checkpoint(cp_dir, client_state=save_obj)
         # We do not return so we do get a "normal" checkpoint to refer to.
